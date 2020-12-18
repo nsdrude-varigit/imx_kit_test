@@ -78,7 +78,7 @@ run_test_with_prompt()
         echo "" > ${TMP_LOG_FILE}
         finished=false
         while ! $finished; do
-                "$@" >> /var/log/test.log 2>&1
+                eval "$@" >> /var/log/test.log 2>&1
                 read -p "$prompt (yes/no/retry)" -n 1 -r
                 echo    # (optional) move to a new line
                 if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -98,7 +98,7 @@ if [ "$HAS_THERMAL" = "true" ]; then
 fi
 
 echo
-echo "Testing Sound"
+echo "Testing Sound Output - Connect a speaker to line out"
 echo "***********************"
 if [ "$SOC" = "MX8M" -o "$SOC" = "MX8MM" -o "$SOC" = "MX8MN" -o "$SOC" = "MX8X" -o "$SOC" = "MX8QM" ]; then
 	run amixer set Headphone 63
@@ -106,6 +106,12 @@ else
 	run amixer set Master 125
 	run amixer set 'Output Mixer HiFi' on
 fi
-run_test_with_prompt "Sound" "Did you hear the sound?" aplay /usr/share/sounds/alsa/Front_Center.wav
+run_test_with_prompt "Sound Out" "Did you hear the sound?" "aplay /usr/share/sounds/alsa/Front_Center.wav"
+
+echo
+echo "Testing Sound Input - Connect a speaker to line out, and play audio on line in"
+echo "***********************"
+run amixer set Headphone 35;run amixer set 'Capture Input' ADC;run amixer set 'DMIC Mux' DMIC2;
+run_test_with_prompt "Sound In -> Out" "Did you hear the sound?" "arecord -c 2 -f cd -d 5 | aplay -f cd"
 
 log_print
