@@ -29,6 +29,7 @@ if [ `grep i.MX8MN /sys/devices/soc0/soc_id` ]; then
 	EMMC_DEV=/dev/mmcblk2
 	HAS_RTC_IRQ=false
 	HAS_CAMERA=true
+        HAS_THERMAL=true
 fi
 
 test_pass()
@@ -67,5 +68,9 @@ run()
 {
 	"$@" >> /var/log/test.log 2>&1
 }
+
+if [ "$HAS_THERMAL" = "true" ]; then
+        run_test_log_output "Thermal" cat /sys/devices/virtual/thermal/thermal_zone0/temp
+fi
 
 log_print
