@@ -73,11 +73,19 @@ run_test_log_output()
 	eval "$@" > ${LOG_FILE_TMP} && test_pass "$name" || test_fail "$name"
 }
 
-# Just to avoid piping after each command
+# Log command and run
 run()
 {
         log_cmd "'$*'"
 	"$@" >> ${LOG_FILE_VERBOSE}
+}
+
+# use for commands that redirect to a file (like backlight)
+run_eval()
+{
+        CMD=$1
+        log_cmd "${CMD}"
+	eval "${CMD}"
 }
 
 run_test_with_prompt()
@@ -107,6 +115,7 @@ if [ "$HAS_THERMAL" = "true" ]; then
         run_test_log_output "Thermal" cat /sys/devices/virtual/thermal/thermal_zone0/temp
 fi
 
+
 echo
 echo "Testing Sound Output - Connect a speaker to line out"
 echo "***********************"
@@ -118,6 +127,7 @@ else
 fi
 run_test_with_prompt "Sound Out" "Playing from file" "Did you hear the sound?" "aplay /usr/share/sounds/alsa/Front_Center.wav"
 
+
 echo
 echo "Testing Sound Input - Connect a speaker to line out, and play audio on line in"
 echo "***********************"
@@ -125,11 +135,34 @@ run amixer set Headphone 35;run amixer set 'Capture Input' ADC;run amixer set 'D
 run_test_with_prompt "Sound In -> Out" "Playing from Line In" "Did you hear the sound?" \
 "arecord -c 2 -f cd -d 5 | aplay -f cd"
 
+
 echo
 echo "Testing Microphone Input - Connect a speaker to line out"
 echo "***********************"
 run amixer set Headphone 35;run amixer set 'Capture Input' DMIC;run amixer set 'DMIC Mux' DMIC1;
 run_test_with_prompt "Microphone" "Speak into microphone..." "Did you hear the recorded sound?" \
 "arecord -f cd -d 5 test.wav; aplay test.wav"
+
+
+echo
+echo "Hit Enter to test backlight"
+echo "***************************"
+read
+function cycle_backlight {
+        for f in /sys/class/backlight/backlight*/brightness
+        do
+                for i in `seq $MAX_BACKLIGHT_VAL -$BACKLIGHT_STEP 0`;
+                do
+                        run_eval "echo $i > $f"
+                        run_eval "sleep 0.05"
+                done
+                for i in `seq 1 $BACKLIGHT_STEP $MAX_BACKLIGHT_VAL`;
+                do
+                        run_eval "echo $i > $f"
+                        run_eval "sleep 0.05"
+                done
+        done
+}
+run_test_with_prompt "Backlight" "Cycling backlight brightness" "Did the backlight change?" "cycle_backlight"
 
 log_print
