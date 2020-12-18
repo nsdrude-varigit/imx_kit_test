@@ -2,19 +2,23 @@
 
 # Helper script for creating release log
 
-readonly LOG_FILE=/var/log/release_test.log
+readonly LOG_FILE_SUMMARY=/var/log/release_summary.log
+readonly LOG_FILE_VERBOSE=/var/log/release_verbose.log
 
 function log_line {
         KEY=$1
         RESULTS=$2
         DATA=$3
-        #echo -e "$KEY \t $VALUE" >> ${LOG_FILE}
-        printf "%-20s | %-4s | %s\n" "$KEY" "$RESULTS" "$DATA" >> ${LOG_FILE}
+        printf "%-20s | %-4s | %s\n" "$KEY" "$RESULTS" "$DATA" >> ${LOG_FILE_SUMMARY}
         sync
 }
 
+function log_cmd {
+        echo "-> $1" >> ${LOG_FILE_VERBOSE}
+}
+
 function log_print {
-        cat ${LOG_FILE}
+        cat ${LOG_FILE_SUMMARY}
 }
 
 function get_current_root_block
@@ -26,7 +30,8 @@ function get_current_root_block
 	done
 }
 
-rm -f ${LOG_FILE}
+rm -f ${LOG_FILE_SUMMARY}
+rm -f ${LOG_FILE_VERBOSE}
 
 log_line "date" "" "$(date)"
 log_line "Test Script" "" "${ABSOLUTE_FILENAME}"

@@ -14,7 +14,7 @@ FAIL="${RED}FAIL$NOCOLOR"
 readonly ABSOLUTE_FILENAME=`readlink -e "$0"`
 readonly ABSOLUTE_DIRECTORY=`dirname ${ABSOLUTE_FILENAME}`
 readonly SCRIPT_POINT=${ABSOLUTE_DIRECTORY}
-readonly TMP_LOG_FILE="/tmp/yocto_release_test.tmp"
+readonly LOG_FILE_TMP="/tmp/yocto_release_test.tmp"
 
 source ${SCRIPT_POINT}/release_log.sh
 
@@ -32,18 +32,25 @@ if [ `grep i.MX8MN /sys/devices/soc0/soc_id` ]; then
         HAS_THERMAL=true
 fi
 
+flush_to_verbose_log() {
+        cat ${LOG_FILE_TMP} >> ${LOG_FILE_VERBOSE}
+        echo "" > ${LOG_FILE_TMP}
+}
+
 test_pass()
 {
         name="$1"
         echo -e "$OK"
-        log_line "$name" "PASS" $(cat ${TMP_LOG_FILE})
+        log_line "$name" "PASS" $(cat ${LOG_FILE_TMP})
+        flush_to_verbose_log
 }
 
 test_fail()
 {
         name="$1"
         echo -e "$FAIL"
-        log_line "$name" "FAIL" $(cat ${TMP_LOG_FILE})
+        log_line "$name" "FAIL" $(cat ${LOG_FILE_TMP})
+        flush_to_verbose_log
 }
 
 # Run test, log pass/fail
@@ -52,8 +59,8 @@ run_test()
 	name="$1"
 	shift
 	echo -n -e "$name: "
-        echo "" > ${TMP_LOG_FILE}
-	eval "$@" > /dev/null && test_pass "$name" || test_fail "$name"
+        log_cmd "'$*'"
+	eval "$@" > ${LOG_FILE_VERBOSE} && test_pass "$name" || test_fail "$name"
 }
 
 # Same as run test, but save output to log file
@@ -62,13 +69,15 @@ run_test_log_output()
 	name="$1"
 	shift
 	echo -n -e "$name: "
-	eval "$@" > ${TMP_LOG_FILE} && test_pass "$name" || test_fail "$name"
+        log_cmd "'$*'"
+	eval "$@" > ${LOG_FILE_TMP} && test_pass "$name" || test_fail "$name"
 }
 
 # Just to avoid piping after each command
 run()
 {
-	"$@" >> /var/log/test.log 2>&1
+        log_cmd "'$*'"
+	"$@" >> ${LOG_FILE_VERBOSE}
 }
 
 run_test_with_prompt()
@@ -77,11 +86,11 @@ run_test_with_prompt()
         description="$2"
         prompt="$3"
         shift;shift;shift
-        echo "" > ${TMP_LOG_FILE}
         finished=false
         while ! $finished; do
                 echo "-> $description"
-                eval "$@" >> /var/log/test.log 2>&1
+                log_cmd "'$*'"
+                eval "$@" >> ${LOG_FILE_VERBOSE} 2>&1
                 read -p "$prompt (yes/no/retry)" -n 1 -r
                 echo    # (optional) move to a new line
                 if [[ $REPLY =~ ^[Yy]$ ]]; then
