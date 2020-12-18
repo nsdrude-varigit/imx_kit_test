@@ -69,8 +69,43 @@ run()
 	"$@" >> /var/log/test.log 2>&1
 }
 
+run_test_with_prompt()
+{
+        name="$1"
+        prompt="$2"
+        shift
+        shift
+        echo "" > ${TMP_LOG_FILE}
+        finished=false
+        while ! $finished; do
+                "$@" >> /var/log/test.log 2>&1
+                read -p "$prompt (yes/no/retry)" -n 1 -r
+                echo    # (optional) move to a new line
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                        test_pass $name
+                        finished=true
+                elif [[ $REPLY =~ ^[Nn]$ ]]; then
+                        test_fail $name
+                        finished=true
+                else
+                        echo "Retrying"
+                fi
+        done
+}
+
 if [ "$HAS_THERMAL" = "true" ]; then
         run_test_log_output "Thermal" cat /sys/devices/virtual/thermal/thermal_zone0/temp
 fi
+
+echo
+echo "Testing Sound"
+echo "***********************"
+if [ "$SOC" = "MX8M" -o "$SOC" = "MX8MM" -o "$SOC" = "MX8MN" -o "$SOC" = "MX8X" -o "$SOC" = "MX8QM" ]; then
+	run amixer set Headphone 63
+else
+	run amixer set Master 125
+	run amixer set 'Output Mixer HiFi' on
+fi
+run_test_with_prompt "Sound" "Did you hear the sound?" aplay /usr/share/sounds/alsa/Front_Center.wav
 
 log_print
