@@ -28,126 +28,45 @@ if [ `grep i.MX8MN /sys/devices/soc0/soc_id` ]; then
 	BACKLIGHT_STEP=10
 	EMMC_DEV=/dev/mmcblk2
 	HAS_RTC_IRQ=false
-	HAS_CAMERA=true
-        HAS_THERMAL=true
+        TESTS=(
+                "test_thermal"
+                "test_audio_speaker_out"
+                "test_audio_line_in"
+                "test_audio_microphone"
+                "test_backlight"
+        )
 fi
 
-flush_to_verbose_log() {
-        cat ${LOG_FILE_TMP} >> ${LOG_FILE_VERBOSE}
-        echo "" > ${LOG_FILE_TMP}
+function test_thermal {
+        print_test_header "Thermal sysfs interface" ""
+        run_test_log_output "Thermal sysfs" cat /sys/devices/virtual/thermal/thermal_zone0/temp
 }
 
-test_pass()
-{
-        name="$1"
-        echo -e "$OK"
-        log_line "$name" "PASS" $(cat ${LOG_FILE_TMP})
-        flush_to_verbose_log
+function test_audio_speaker_out {
+        print_test_header "Testing Sound Output" "Connect a speaker to line out"
+        if [ "$SOC" = "MX8M" -o "$SOC" = "MX8MM" -o "$SOC" = "MX8MN" -o "$SOC" = "MX8X" -o "$SOC" = "MX8QM" ]; then
+                run amixer set Headphone 63
+        else
+                run amixer set Master 125
+                run amixer set 'Output Mixer HiFi' on
+        fi
+        run_test_with_prompt "Sound Out" "Playing from file" "Did you hear the sound?" "aplay /usr/share/sounds/alsa/Front_Center.wav"
 }
 
-test_fail()
-{
-        name="$1"
-        echo -e "$FAIL"
-        log_line "$name" "FAIL" $(cat ${LOG_FILE_TMP})
-        flush_to_verbose_log
+function test_audio_line_in {
+        print_test_header "Testing Sound Input" "Connect a speaker to line out, and play audio on line in"
+        run amixer set Headphone 35;run amixer set 'Capture Input' ADC;run amixer set 'DMIC Mux' DMIC2;
+        run_test_with_prompt "Sound In -> Out" "Playing from Line In" "Did you hear the sound?" \
+        "arecord -c 2 -f cd -d 5 | aplay -f cd"
 }
 
-# Run test, log pass/fail
-run_test()
-{
-	name="$1"
-	shift
-	echo -n -e "$name: "
-        log_cmd "'$*'"
-	eval "$@" > ${LOG_FILE_VERBOSE} && test_pass "$name" || test_fail "$name"
+function test_audio_microphone {
+        print_test_header "Testing Microphone Input" "Connect a speaker to line out"
+        run amixer set Headphone 35;run amixer set 'Capture Input' DMIC;run amixer set 'DMIC Mux' DMIC1;
+        run_test_with_prompt "Microphone" "Speak into microphone..." "Did you hear the recorded sound?" \
+        "arecord -f cd -d 5 test.wav; aplay test.wav"
 }
 
-# Same as run test, but save output to log file
-run_test_log_output()
-{
-	name="$1"
-	shift
-	echo -n -e "$name: "
-        log_cmd "'$*'"
-	eval "$@" > ${LOG_FILE_TMP} && test_pass "$name" || test_fail "$name"
-}
-
-# Log command and run
-run()
-{
-        log_cmd "'$*'"
-	"$@" >> ${LOG_FILE_VERBOSE}
-}
-
-# use for commands that redirect to a file (like backlight)
-run_eval()
-{
-        CMD=$1
-        log_cmd "${CMD}"
-	eval "${CMD}"
-}
-
-run_test_with_prompt()
-{
-        name="$1"
-        description="$2"
-        prompt="$3"
-        shift;shift;shift
-        finished=false
-        while ! $finished; do
-                echo "-> $description"
-                log_cmd "'$*'"
-                eval "$@" >> ${LOG_FILE_VERBOSE} 2>&1
-                read -p "$prompt (yes/no/retry)" -n 1 -r
-                echo    # (optional) move to a new line
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                        test_pass "$name"
-                        finished=true
-                elif [[ $REPLY =~ ^[Nn]$ ]]; then
-                        test_fail "$name"
-                        finished=true
-                fi
-        done
-}
-
-if [ "$HAS_THERMAL" = "true" ]; then
-        run_test_log_output "Thermal" cat /sys/devices/virtual/thermal/thermal_zone0/temp
-fi
-
-
-echo
-echo "Testing Sound Output - Connect a speaker to line out"
-echo "***********************"
-if [ "$SOC" = "MX8M" -o "$SOC" = "MX8MM" -o "$SOC" = "MX8MN" -o "$SOC" = "MX8X" -o "$SOC" = "MX8QM" ]; then
-	run amixer set Headphone 63
-else
-	run amixer set Master 125
-	run amixer set 'Output Mixer HiFi' on
-fi
-run_test_with_prompt "Sound Out" "Playing from file" "Did you hear the sound?" "aplay /usr/share/sounds/alsa/Front_Center.wav"
-
-
-echo
-echo "Testing Sound Input - Connect a speaker to line out, and play audio on line in"
-echo "***********************"
-run amixer set Headphone 35;run amixer set 'Capture Input' ADC;run amixer set 'DMIC Mux' DMIC2;
-run_test_with_prompt "Sound In -> Out" "Playing from Line In" "Did you hear the sound?" \
-"arecord -c 2 -f cd -d 5 | aplay -f cd"
-
-
-echo
-echo "Testing Microphone Input - Connect a speaker to line out"
-echo "***********************"
-run amixer set Headphone 35;run amixer set 'Capture Input' DMIC;run amixer set 'DMIC Mux' DMIC1;
-run_test_with_prompt "Microphone" "Speak into microphone..." "Did you hear the recorded sound?" \
-"arecord -f cd -d 5 test.wav; aplay test.wav"
-
-
-echo
-echo "Hit Enter to test backlight"
-echo "***************************"
-read
 function cycle_backlight {
         for f in /sys/class/backlight/backlight*/brightness
         do
@@ -163,6 +82,15 @@ function cycle_backlight {
                 done
         done
 }
-run_test_with_prompt "Backlight" "Cycling backlight brightness" "Did the backlight change?" "cycle_backlight"
+
+function test_backlight {
+        print_test_header "Testing Backlight" "Verify display brightness changes"
+        run_test_with_prompt "Backlight" "Cycling backlight brightness" "Did the backlight change?" "cycle_backlight"
+}
+
+# Iterate through all tests
+for TEST in "${TESTS[@]}"; do
+        $TEST
+done
 
 log_print

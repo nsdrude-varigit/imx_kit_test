@@ -30,6 +30,94 @@ function get_current_root_block
 	done
 }
 
+
+flush_to_verbose_log() {
+        cat ${LOG_FILE_TMP} >> ${LOG_FILE_VERBOSE}
+        echo "" > ${LOG_FILE_TMP}
+}
+
+test_pass()
+{
+        name="$1"
+        echo -e "$OK"
+        log_line "$name" "PASS" $(cat ${LOG_FILE_TMP})
+        flush_to_verbose_log
+}
+
+test_fail()
+{
+        name="$1"
+        echo -e "$FAIL"
+        log_line "$name" "FAIL" $(cat ${LOG_FILE_TMP})
+        flush_to_verbose_log
+}
+
+# Run test, log pass/fail
+run_test()
+{
+	name="$1"
+	shift
+	echo -n -e "$name: "
+        log_cmd "'$*'"
+	eval "$@" > ${LOG_FILE_VERBOSE} && test_pass "$name" || test_fail "$name"
+}
+
+# Same as run test, but save output to log file
+run_test_log_output()
+{
+	name="$1"
+	shift
+	echo -n -e "$name: "
+        log_cmd "'$*'"
+	eval "$@" > ${LOG_FILE_TMP} && test_pass "$name" || test_fail "$name"
+}
+
+# Log command and run
+run()
+{
+        log_cmd "'$*'"
+	"$@" >> ${LOG_FILE_VERBOSE}
+}
+
+# use for commands that redirect to a file (like backlight)
+run_eval()
+{
+        CMD=$1
+        log_cmd "${CMD}"
+	eval "${CMD}"
+}
+
+run_test_with_prompt()
+{
+        name="$1"
+        description="$2"
+        prompt="$3"
+        shift;shift;shift
+        finished=false
+        while ! $finished; do
+                echo "-> $description"
+                log_cmd "'$*'"
+                eval "$@" >> ${LOG_FILE_VERBOSE} 2>&1
+                read -p "$prompt (yes/no/retry)" -n 1 -r
+                echo    # (optional) move to a new line
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                        test_pass "$name"
+                        finished=true
+                elif [[ $REPLY =~ ^[Nn]$ ]]; then
+                        test_fail "$name"
+                        finished=true
+                fi
+        done
+}
+
+function print_test_header {
+        TITLE=$1
+        INSTRUCTIONS=$2
+        echo
+        echo "$TITLE: $INSTRUCTIONS"
+        echo "************************"
+}
+
 rm -f ${LOG_FILE_SUMMARY}
 rm -f ${LOG_FILE_VERBOSE}
 
