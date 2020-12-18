@@ -34,6 +34,7 @@ if [ `grep i.MX8MN /sys/devices/soc0/soc_id` ]; then
                 "test_audio_line_in"
                 "test_audio_microphone"
                 "test_backlight"
+                "test_suspend"
         )
 fi
 
@@ -86,6 +87,17 @@ function cycle_backlight {
 function test_backlight {
         print_test_header "Testing Backlight" "Verify display brightness changes"
         run_test_with_prompt "Backlight" "Cycling backlight brightness" "Did the backlight change?" "cycle_backlight"
+}
+
+function test_suspend {
+        print_test_header "Testing Ten Suspend Cycles" "Wake using touchscreen, on/off button, and gpio keys"
+        for i in {1..10}; do
+                run pm-suspend
+                if [ "$i" -lt "10" ]; then
+                        echo "Awake $i/10, waiting 5 seconds and then suspending again"
+                        run sleep 5
+                fi
+        done
 }
 
 # Iterate through all tests
