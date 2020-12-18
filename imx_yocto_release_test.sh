@@ -34,14 +34,16 @@ fi
 
 test_pass()
 {
+        name="$1"
         echo -e "$OK"
-        log_line $1 "PASS" $(cat ${TMP_LOG_FILE})
+        log_line "$name" "PASS" $(cat ${TMP_LOG_FILE})
 }
 
 test_fail()
 {
+        name="$1"
         echo -e "$FAIL"
-        log_line $1 "FAIL" $(cat ${TMP_LOG_FILE})
+        log_line "$name" "FAIL" $(cat ${TMP_LOG_FILE})
 }
 
 # Run test, log pass/fail
@@ -51,7 +53,7 @@ run_test()
 	shift
 	echo -n -e "$name: "
         echo "" > ${TMP_LOG_FILE}
-	eval "$@" > /dev/null && test_pass $name || test_fail $name
+	eval "$@" > /dev/null && test_pass "$name" || test_fail "$name"
 }
 
 # Same as run test, but save output to log file
@@ -60,7 +62,7 @@ run_test_log_output()
 	name="$1"
 	shift
 	echo -n -e "$name: "
-	eval "$@" > ${TMP_LOG_FILE} && test_pass $name || test_fail $name
+	eval "$@" > ${TMP_LOG_FILE} && test_pass "$name" || test_fail "$name"
 }
 
 # Just to avoid piping after each command
@@ -72,23 +74,22 @@ run()
 run_test_with_prompt()
 {
         name="$1"
-        prompt="$2"
-        shift
-        shift
+        description="$2"
+        prompt="$3"
+        shift;shift;shift
         echo "" > ${TMP_LOG_FILE}
         finished=false
         while ! $finished; do
+                echo "-> $description"
                 eval "$@" >> /var/log/test.log 2>&1
                 read -p "$prompt (yes/no/retry)" -n 1 -r
                 echo    # (optional) move to a new line
                 if [[ $REPLY =~ ^[Yy]$ ]]; then
-                        test_pass $name
+                        test_pass "$name"
                         finished=true
                 elif [[ $REPLY =~ ^[Nn]$ ]]; then
-                        test_fail $name
+                        test_fail "$name"
                         finished=true
-                else
-                        echo "Retrying"
                 fi
         done
 }
@@ -106,12 +107,20 @@ else
 	run amixer set Master 125
 	run amixer set 'Output Mixer HiFi' on
 fi
-run_test_with_prompt "Sound Out" "Did you hear the sound?" "aplay /usr/share/sounds/alsa/Front_Center.wav"
+run_test_with_prompt "Sound Out" "Playing from file" "Did you hear the sound?" "aplay /usr/share/sounds/alsa/Front_Center.wav"
 
 echo
 echo "Testing Sound Input - Connect a speaker to line out, and play audio on line in"
 echo "***********************"
 run amixer set Headphone 35;run amixer set 'Capture Input' ADC;run amixer set 'DMIC Mux' DMIC2;
-run_test_with_prompt "Sound In -> Out" "Did you hear the sound?" "arecord -c 2 -f cd -d 5 | aplay -f cd"
+run_test_with_prompt "Sound In -> Out" "Playing from Line In" "Did you hear the sound?" \
+"arecord -c 2 -f cd -d 5 | aplay -f cd"
+
+echo
+echo "Testing Microphone Input - Connect a speaker to line out"
+echo "***********************"
+run amixer set Headphone 35;run amixer set 'Capture Input' DMIC;run amixer set 'DMIC Mux' DMIC1;
+run_test_with_prompt "Microphone" "Speak into microphone..." "Did you hear the recorded sound?" \
+"arecord -f cd -d 5 test.wav; aplay test.wav"
 
 log_print
